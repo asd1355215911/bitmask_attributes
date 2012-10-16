@@ -67,11 +67,10 @@ module BitmaskAttributes
         model.class_eval %(
           def #{attribute}=(value)
             if value.is_a?(Fixnum)
-              self.#{attribute} = self.class.#{attribute}_for_bitmask(value)
-            else
-              values = value.kind_of?(Array) ? value : [value]
-              self.#{attribute}.replace(values.reject{|value| #{eval_string_for_zero('value')}})
+              value = self.class.#{attribute}_for_bitmask(value)
             end
+            values = value.kind_of?(Array) ? value : [value]
+            self.#{attribute}.replace(values.reject{|value| #{eval_string_for_zero('value')}})
           end
         )
       end
@@ -100,7 +99,7 @@ module BitmaskAttributes
 
           def self.#{attribute}_for_bitmask(entry)
             size = self.bitmasks[:#{attribute}].size
-            unless entry.is_a?(Fixnum) && entry.between?(0, 2 ** (size - 1))
+            unless entry.is_a?(Fixnum) && entry.between?(0, (2 ** size) - 1)
               raise ArgumentError, "Unsupported value for #{attribute}: \#{entry.inspect}"
             end
             self.bitmasks[:#{attribute}].inject([]) do |values, (value, bitmask)|
