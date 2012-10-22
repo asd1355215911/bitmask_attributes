@@ -29,7 +29,16 @@ module BitmaskAttributes
         return if defined?(Rails) && Rails.configuration.cache_classes || !model.table_exists?
 
         unless model.columns.detect { |col| col.name == attribute.to_s }
-          Rails.logger.warn "WARNING: `#{attribute}' is not an attribute of `#{model}'. But, it's ok if it happens during migrations and your \"bitmasked\" attribute is still not created."
+          missing_attribute(attribute, model)
+        end
+      end
+
+      def missing_attribute(attribute, model)
+        message = "WARNING: `#{attribute}' is not an attribute of `#{model.class.name}'. But, it's ok if it happens during migrations and your \"bitmasked\" attribute is still not created."
+        if defined?(Rails)
+          Rails.logger.warn message
+        else
+          STDERR.puts message
         end
       end
 
@@ -56,8 +65,11 @@ module BitmaskAttributes
 
       def override_setter_on(model)
         model.class_eval %(
-          def #{attribute}=(raw_value)
-            values = raw_value.kind_of?(Array) ? raw_value : [raw_value]
+          def #{attribute}=(value)
+            if value.is_a?(Fixnum)
+              value = self.class.#{attribute}_for_bitmask(value)
+            end
+            values = value.kind_of?(Array) ? value : [value]
             self.#{attribute}.replace(values.reject{|value| #{eval_string_for_zero('value')}})
           end
         )
@@ -84,6 +96,18 @@ module BitmaskAttributes
               bitmask | bit
             end
           end
+
+          def self.#{attribute}_for_bitmask(entry)
+            size = self.bitmasks[:#{attribute}].size
+            unless entry.is_a?(Fixnum) && entry.between?(0, (2 ** size) - 1)
+              raise ArgumentError, "Unsupported value for #{attribute}: \#{entry.inspect}"
+            end
+            self.bitmasks[:#{attribute}].inject([]) do |values, (value, bitmask)|
+              values.tap do
+                values << value.to_sym if (entry & bitmask > 0)
+              end
+            end
+          end
         )
       end
 
@@ -99,7 +123,11 @@ module BitmaskAttributes
           def #{attribute}?(*values)
             if !values.blank?
               values.all? do |value|
-                self.#{attribute}.include?(value)
+                if #{eval_string_for_zero('value')}
+                  self.#{attribute}.blank?
+                else
+                  self.#{attribute}.include?(value)
+                end
               end
             else
               self.#{attribute}.present?
@@ -118,8 +146,12 @@ module BitmaskAttributes
                 where('#{column_name_with_table(model)} > 0')
               else
                 sets = values.map do |value|
-                  mask = ::#{model}.bitmask_for_#{attribute}(value)
-                  "#{column_name_with_table(model)} & \#{mask} <> 0"
+                  if #{eval_string_for_zero('value')}
+                    "#{column_name_with_table(model)} = 0"
+                  else
+                    mask = ::#{model}.bitmask_for_#{attribute}(value)
+                    "#{column_name_with_table(model)} & \#{mask} <> 0"
+                  end
                 end
                 where(sets.join(' AND '))
               end
@@ -129,7 +161,11 @@ module BitmaskAttributes
               if values.blank?
                 no_#{attribute}
               else
-                where("#{column_name_with_table(model)} & ? = 0#{or_is_null_condition}", ::#{model}.bitmask_for_#{attribute}(*values))
+                relation = where("#{column_name_with_table(model)} & ? = 0#{or_is_null_condition}", ::#{model}.bitmask_for_#{attribute}(*values))
+                if values.any?{|value|#{eval_string_for_zero('value')}}
+                  relation = relation.where("#{column_name_with_table(model)} > 0")
+                end
+                relation
               end
             }
 
@@ -138,7 +174,11 @@ module BitmaskAttributes
               if values.blank?
                 no_#{attribute}
               else
-                where("#{column_name_with_table(model)} = ?", ::#{model}.bitmask_for_#{attribute}(*values))
+                relation = where("#{column_name_with_table(model)} = ?", ::#{model}.bitmask_for_#{attribute}(*values))
+                if values.any?{|value|#{eval_string_for_zero('value')}}
+                  relation = relation.where("#{column_name_with_table(model)} = 0#{or_is_null_condition}")
+                end
+                relation
               end
             }
 
@@ -149,7 +189,11 @@ module BitmaskAttributes
               if values.blank?
                 where('#{column_name_with_table(model)} > 0')
               else
-                where("#{column_name_with_table(model)} & ? <> 0", ::#{model}.bitmask_for_#{attribute}(*values))
+                clause = "#{attribute} & ? <> 0"
+                if values.any?{|value|#{eval_string_for_zero('value')}}
+                  clause += " OR #{column_name_with_table(model)} = 0#{or_is_null_condition}"
+                end
+                where(clause, ::#{model}.bitmask_for_#{attribute}(*values))
               end
             }
         )

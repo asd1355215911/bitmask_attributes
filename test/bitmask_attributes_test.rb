@@ -53,6 +53,14 @@ class BitmaskAttributesTest < ActiveSupport::TestCase
         assert_stored campaign, :phone, :email
       end
 
+      should "can assign raw bitmask values" do
+        campaign = @campaign_class.new
+        campaign.medium = 3
+        assert_stored campaign, :web, :print
+        campaign.medium = 0
+        assert_empty campaign.medium
+      end
+
       should "can save bitmask to db and retrieve values transparently" do
         campaign = @campaign_class.new(:medium => [:web, :print])
         assert_stored campaign, :web, :print
@@ -78,6 +86,13 @@ class BitmaskAttributesTest < ActiveSupport::TestCase
         assert_unsupported { campaign.medium = [:so_will_this] }
       end
 
+      should "cannot use unsupported values for raw bitmask values" do
+        campaign = @campaign_class.new(:medium => :web)
+        number_of_attributes = @campaign_class.bitmasks[:medium].size
+        assert_unsupported { campaign.medium = (2 ** number_of_attributes) }
+        assert_unsupported { campaign.medium = -1 }
+      end
+
       should "can determine bitmasks using convenience method" do
         assert @campaign_class.bitmask_for_medium(:web, :print)
         assert_equal(
@@ -88,6 +103,15 @@ class BitmaskAttributesTest < ActiveSupport::TestCase
 
       should "assert use of unknown value in convenience method will result in exception" do
         assert_unsupported { @campaign_class.bitmask_for_medium(:web, :and_this_isnt_valid)  }
+      end
+
+      should "can determine bitmask entries using inverse convenience method" do
+        assert @campaign_class.medium_for_bitmask(3)
+        assert_equal([:web, :print], @campaign_class.medium_for_bitmask(3))
+      end
+
+      should "assert use of non Fixnum value in inverse convenience method will result in exception" do
+        assert_unsupported { @campaign_class.medium_for_bitmask(:this_isnt_valid)  }
       end
 
       should "hash of values is with indifferent access" do
@@ -240,14 +264,22 @@ class BitmaskAttributesTest < ActiveSupport::TestCase
         campaign = @campaign_class.new(:allow_zero => :none)
         assert campaign.save
         assert_equal [],campaign.allow_zero
+        assert_equal [campaign], @campaign_class.with_allow_zero(:none)
+        assert_equal [], @campaign_class.without_allow_zero(:none)
+        assert_equal [campaign], @campaign_class.with_any_allow_zero(:none, :one)
+        assert_equal [campaign], @campaign_class.with_exact_allow_zero(:none)
 
         campaign.allow_zero = :none
         assert campaign.save
         assert_equal [],campaign.allow_zero
+        assert campaign.allow_zero?(:none)
 
         campaign.allow_zero = [:one,:none]
         assert campaign.save
         assert_equal [:one],campaign.allow_zero
+        assert_equal [], @campaign_class.with_allow_zero(:none)
+        assert_equal [campaign], @campaign_class.without_allow_zero(:none)
+        assert_equal [], @campaign_class.with_exact_allow_zero(:none, :one)
       end
 
 
