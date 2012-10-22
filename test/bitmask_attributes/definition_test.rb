@@ -31,4 +31,33 @@ class BitmaskAttributesTest < ActiveSupport::TestCase
     end
   end
 
+  context 'column_name_with_table' do
+      setup do
+        @column = Class.new do
+          attr_reader :name
+
+          def initialize(name); @name = name end
+        end
+
+        @model = Class.new do
+          attr_reader :columns
+
+          def initialize(columns); @columns = columns end
+
+          def table_exists?; true end
+
+          def self.name; 'Model' end
+
+          def self.table_name; 'models' end
+        end
+      end
+
+    should 'reference table name' do
+      definition = BitmaskAttributes::Definition.new(:existing_column)
+
+      some_model = @model.new([@column.new(:name)])
+      assert_equal definition.send(:column_name_with_table, @model), 'models.existing_column'
+    end
+  end
+
 end
