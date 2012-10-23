@@ -282,6 +282,16 @@ class BitmaskAttributesTest < ActiveSupport::TestCase
         assert_equal [], @campaign_class.with_exact_allow_zero(:none, :one)
       end
 
+      should 'return friendly value with to_s only' do
+        singular = @campaign_class.new(:medium => :web).medium
+        plural = @campaign_class.new(:medium => [:web, :print]).medium
+
+        assert_equal singular, [:web]
+        assert_equal plural, [:web, :print]
+        assert_equal singular.to_s, 'web'
+        assert_equal plural.to_s, 'web, print'
+      end
+
 
       private
 
