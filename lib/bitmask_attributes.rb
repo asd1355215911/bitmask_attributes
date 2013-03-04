@@ -1,4 +1,3 @@
-require 'bitmask_attributes/bitwise'
 require 'bitmask_attributes/value_proxy'
 
 module BitmaskAttributes
@@ -15,17 +14,17 @@ module BitmaskAttributes
       variable = "@#{attribute}"
       values = options[:as]
 
-      arel_attr = arel_table[attribute]
-      allow_null = options[:null].nil? || options[:null]
+      stub = Squeel::Nodes::Stub.new attribute
 
-      eq_zero = arel_attr.eq(0)
-      eq_zero = eq_zero.or(arel_attr.eq(nil)) if allow_null
-
-      is_zero = lambda do |value|
-        zero = options[:zero_value]
-        zero ? value.blank? || value == zero : value.blank?
+      # Where condition for zero or nil.
+      eq_zero = if options[:null].nil? || options[:null]
+        (stub == 0) | (stub == nil)
+      else
+        stub == 0
       end
 
+      # Conveniently check for zero values.
+      is_zero = lambda {|value| value.blank? || value == options[:zero_value]}
       not_zero = lambda {|value| !is_zero.(value)}
 
       masks = HashWithIndifferentAccess.new.tap do |masks|
@@ -107,13 +106,13 @@ module BitmaskAttributes
 
       scope "with_#{attribute}", proc {|*values|
         if values.blank?
-          where(arel_attr.gt(0))
+          where{stub > 0}
         else
           values.inject(scoped) do |scope, value|
             if is_zero.(value)
               scope.where(eq_zero)
             else
-              scope.where((arel_attr & masks[value]).gt(0))
+              scope.where{stub.op('&', masks[value]) > 0}
             end
           end
         end
@@ -124,8 +123,8 @@ module BitmaskAttributes
           send("no_#{attribute}")
         else
           mask = send("bitmask_for_#{attribute}", *values)
-          relation = where(arel_attr.eq(nil).or((arel_attr & mask).eq(0)))
-          values.any?(&is_zero) ? relation.where(arel_attr.gt(0)) : relation
+          relation = where{(stub == nil) | (stub.op('&', mask) == 0)}
+          values.any?(&is_zero) ? relation.where{stub > 0} : relation
         end
       }
 
@@ -134,8 +133,8 @@ module BitmaskAttributes
           send("no_#{attribute}")
         else
           mask = send("bitmask_for_#{attribute}", *values)
-          where(values.any?(&not_zero) ? arel_attr.eq(mask) : nil)
-          .where(values.any?(&is_zero) ? eq_zero : nil)
+          where{stub == mask if values.any?(&not_zero)}
+          .where{eq_zero if values.any?(&is_zero)}
         end
       }
 
@@ -143,17 +142,19 @@ module BitmaskAttributes
 
       scope "with_any_#{attribute}", proc {|*values|
         if values.blank?
-          where(arel_attr.gt(0))
+          where{stub > 0}
         else
           mask = send("bitmask_for_#{attribute}", *values)
-          condition = (arel_attr & mask).not_eq(0)
-          where(values.any?(&is_zero) ? condition.or(eq_zero) : condition)
+          where do
+            condition = stub.op('&', mask) != 0
+            values.any?(&is_zero) ? (condition | eq_zero) : condition
+          end
         end
       }
 
       values.each do |value|
         scope "#{attribute}_for_#{value}", proc {
-          where((arel_attr & masks[value]).not_eq(0))
+          where{stub.op('&', masks[value]) != 0}
         }
       end
 

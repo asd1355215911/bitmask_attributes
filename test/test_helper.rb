@@ -1,11 +1,13 @@
-require "rubygems"
-require 'bundler/setup'
+require 'rubygems'
+require 'bundler'
+Bundler.setup
 
 require 'test/unit'
 begin; require 'turn'; rescue LoadError; end
 require 'shoulda'
 
 require 'active_record'
+require 'squeel'
 
 $:.unshift File.expand_path("../../lib", __FILE__)
 require 'bitmask_attributes'
