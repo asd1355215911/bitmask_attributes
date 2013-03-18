@@ -8,3 +8,4 @@ pkg
 *.gem
 /nbproject
 .idea/
+.bundle

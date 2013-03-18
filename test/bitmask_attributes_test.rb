@@ -86,19 +86,22 @@ class BitmaskAttributesTest < ActiveSupport::TestCase
         assert_unsupported { campaign.medium = [:so_will_this] }
       end
 
+      should "can only use Fixnum values for raw bitmask values" do
+        campaign = @campaign_class.new(:medium => :web)
+        assert_unsupported { campaign.medium = :this_will_fail }
+        assert_equal(campaign.medium, [:web])
+      end
+
       should "cannot use unsupported values for raw bitmask values" do
         campaign = @campaign_class.new(:medium => :web)
-        number_of_attributes = @campaign_class.bitmasks[:medium].size
+        number_of_attributes = @campaign_class.values_for_medium.size
         assert_unsupported { campaign.medium = (2 ** number_of_attributes) }
         assert_unsupported { campaign.medium = -1 }
       end
 
       should "can determine bitmasks using convenience method" do
         assert @campaign_class.bitmask_for_medium(:web, :print)
-        assert_equal(
-          @campaign_class.bitmasks[:medium][:web] | @campaign_class.bitmasks[:medium][:print],
-          @campaign_class.bitmask_for_medium(:web, :print)
-        )
+        assert_equal(3, @campaign_class.bitmask_for_medium(:web, :print))
       end
 
       should "assert use of unknown value in convenience method will result in exception" do
@@ -265,8 +268,8 @@ class BitmaskAttributesTest < ActiveSupport::TestCase
         assert campaign.save
         assert_equal [],campaign.allow_zero
         assert_equal [campaign], @campaign_class.with_allow_zero(:none)
-        assert_equal [], @campaign_class.without_allow_zero(:none)
         assert_equal [campaign], @campaign_class.with_any_allow_zero(:none, :one)
+        assert_equal [], @campaign_class.without_allow_zero(:none)
         assert_equal [campaign], @campaign_class.with_exact_allow_zero(:none)
 
         campaign.allow_zero = :none
@@ -282,34 +285,28 @@ class BitmaskAttributesTest < ActiveSupport::TestCase
         assert_equal [], @campaign_class.with_exact_allow_zero(:none, :one)
       end
 
-      should 'return friendly value with to_s only' do
-        singular = @campaign_class.new(:medium => :web).medium
-        plural = @campaign_class.new(:medium => [:web, :print]).medium
-
-        assert_equal singular, [:web]
-        assert_equal plural, [:web, :print]
-        assert_equal singular.to_s, 'web'
-        assert_equal plural.to_s, 'web, print'
-      end
-
 
       private
 
-        def assert_unsupported(&block)
-          assert_raises(ArgumentError, &block)
-        end
+      def assert_unsupported(&block)
+        assert_raises(ArgumentError, &block)
+      end
 
-        def assert_stored(record, *values)
-          values.each do |value|
-            assert record.medium.any? { |v| v.to_s == value.to_s }, "Values #{record.medium.inspect} does not include #{value.inspect}"
-          end
-          full_mask = values.inject(0) do |mask, value|
-            mask | @campaign_class.bitmasks[:medium][value]
-          end
-          assert_equal full_mask, record.medium.to_i
+      def assert_stored(record, *values)
+        values.each do |value|
+          assert record.medium.any? { |v| v.to_s == value.to_s }, "Values #{record.medium.inspect} does not include #{value.inspect}"
         end
+        mask = @campaign_class.bitmask_for_medium(*values)
+        assert_equal mask, record.medium.to_i
+      end
 
     end
+  end
+
+  should "allow nulls for zero value" do
+    campaign = CampaignWithNull.create
+    assert campaign.save
+    assert_equal [campaign], CampaignWithNull.with_allow_zero(:none)
   end
 
   should "accept a default value option" do

@@ -2,6 +2,7 @@
 
 require "bundler"
 Bundler::GemHelper.install_tasks
+Bundler.setup
 
 require 'rake/testtask'
 
@@ -63,13 +64,13 @@ namespace :changeling do
       puts "You must be on the master branch to bump the version!"
       exit!
     end
-    
+
     # Thanks, Jeweler!
     if BitmaskAttributes::VERSION  =~ /^(\d+)\.(\d+)\.(\d+)(?:\.(.*?))?$/
       major = $1.to_i
       minor = $2.to_i
       patch = $3.to_i
-      
+
       if $4 =~ /([a-z]+)(\d+)?/i
         pre_name    = $1
         pre_version = ($2 || 0).to_i
@@ -77,7 +78,7 @@ namespace :changeling do
     else
       abort
     end
-    
+
     case args[:part]
     when /minor/
       minor += 1
@@ -108,7 +109,7 @@ EOF
       puts "You must be on the master branch to update changelog!"
       exit!
     end
-    
+
     load "lib/#{name}/version.rb"
     file    = "CHANGELOG.rdoc"
     old     = File.read(file)
@@ -144,7 +145,7 @@ EOF
     Rake::Task['changeling:bump'].invoke(t.name)
     Rake::Task['changeling:change'].invoke
   end
-  
+
   desc "Bump by a pre-release version, (1.0.0.pre1 => 1.0.0.pre2)"
   task :pre do |t|
     Rake::Task['changeling:bump'].invoke(t.name)
