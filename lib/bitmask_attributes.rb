@@ -38,7 +38,7 @@ module BitmaskAttributes
 
       if default = options[:default]
         after_initialize do
-          send("#{attribute}=", default) unless send("#{attribute}?")
+          send("#{attribute}=", default) unless read_attribute(attribute)
         end
       end
 
@@ -75,6 +75,7 @@ module BitmaskAttributes
       end
 
       define_method "#{attribute}=" do |value|
+        value ||= default if default
         if value.is_a?(Fixnum)
           value = self.class.send("#{attribute}_for_bitmask", value)
         end
