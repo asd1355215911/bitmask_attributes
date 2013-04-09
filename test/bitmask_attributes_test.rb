@@ -314,6 +314,12 @@ class BitmaskAttributesTest < ActiveSupport::TestCase
     assert_equal DefaultValue.new.default_array, [:y, :z]
     assert_equal DefaultValue.new(:default_sym => :x).default_sym, [:x]
     assert_equal DefaultValue.new(:default_array => [:x]).default_array, [:x]
+    assert_equal DefaultValue.new(:default_sym => []).default_sym, []
+
+    default_value = DefaultValue.new(:default_sym => :x)
+
+    default_value.default_sym = nil
+    assert_equal default_value.default_sym, [:y]
   end
 
   context_with_classes 'Campaign with null attributes',CampaignWithNull,CompanyWithNull
