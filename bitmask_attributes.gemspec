@@ -14,5 +14,5 @@ Gem::Specification.new do |gem|
   gem.require_paths = ['lib']
   gem.version       = BitmaskAttributes::VERSION.dup
 
-  gem.add_dependency 'squeel'
+  gem.add_dependency 'activerecord', '~>4.0'
 end

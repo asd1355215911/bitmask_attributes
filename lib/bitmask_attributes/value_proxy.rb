@@ -23,9 +23,9 @@ module BitmaskAttributes
     private
 
     def updated!
-      @record.send(:write_attribute, @attribute, to_i)
       _replace(map(&:to_sym))
       uniq!
+      @record.send(:write_attribute, @attribute, to_i)
     rescue ArgumentError => e
       _replace(extract_values)
       raise e

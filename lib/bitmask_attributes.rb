@@ -7,32 +7,29 @@ module BitmaskAttributes
 
     def bitmask(attribute, options={}, &extension)
 
-      unless options[:as] && options[:as].kind_of?(Array)
+      unless options[:as].kind_of?(Array)
         raise ArgumentError, "Must provide an Array :as option"
       end
 
-      variable = "@#{attribute}"
-      values = options[:as]
-
-      stub = Squeel::Nodes::Stub.new attribute
+      column = arel_table[attribute]
+      quoted = connection.quote_column_name(attribute)
 
       # Where condition for zero or nil.
       eq_zero = if options[:null].nil? || options[:null]
-        (stub == 0) | (stub == nil)
+        "#{quoted} = 0 OR #{quoted} IS NULL"
       else
-        stub == 0
+        "#{quoted} = 0"
       end
 
       # Conveniently check for zero values.
-      is_zero = lambda {|value| value.blank? || value == options[:zero_value]}
-      not_zero = lambda {|value| !is_zero.(value)}
+      is_zero = -> value { value.blank? || value == options[:zero_value] }
+      not_zero = -> value { !is_zero.(value) }
 
-      masks = HashWithIndifferentAccess.new.tap do |masks|
-        values.each_with_index do |value, index|
-          masks[value] = 0b1 << index
-        end
+      # Masks for each value.
+      masks = HashWithIndifferentAccess.new
+      options[:as].each.with_index do |value, index|
+        masks[value] = 0b1 << index
       end
-
 
       # Default Value
 
@@ -46,7 +43,7 @@ module BitmaskAttributes
       # Class Methods
 
       define_singleton_method "values_for_#{attribute}" do
-        values
+        options[:as].dup
       end
 
       define_singleton_method "bitmask_for_#{attribute}" do |*values|
@@ -61,8 +58,46 @@ module BitmaskAttributes
         unless value.is_a?(Fixnum) && value.between?(0, 2 ** masks.size - 1)
           raise ArgumentError, "Unsupported value for #{attribute}: #{value.inspect}"
         end
-        masks.inject([]) do |values, (name, bitmask)|
-          values.tap{values << name.to_sym if value & bitmask > 0}
+        values = []
+        masks.each{ |name, mask| values << name.to_sym if value & mask > 0 }
+        values
+      end
+
+      define_singleton_method "with_#{attribute}" do |*values|
+        return where(column.gt(0)) if values.blank?
+        values.reduce(all) do |scope, value|
+          next scope.where(eq_zero) if is_zero.(value)
+          scope.where("#{quoted} & #{masks[value]} > 0")
+        end
+      end
+
+      define_singleton_method "without_#{attribute}" do |*values|
+        return send("no_#{attribute}") if values.blank?
+        mask = send("bitmask_for_#{attribute}", *values)
+        relation = where("#{quoted} IS NULL OR #{quoted} & #{mask} = 0")
+        values.any?(&is_zero) ? relation.where(column.gt(0)) : relation
+      end
+
+      define_singleton_method "with_exact_#{attribute}" do |*values|
+        return send("no_#{attribute}") if values.blank?
+        mask = send("bitmask_for_#{attribute}", *values)
+        where(values.any?(&not_zero) ? column.eq(mask) : nil)
+        .where(values.any?(&is_zero) ? eq_zero : nil)
+      end
+
+      define_singleton_method("no_#{attribute}"){ where(eq_zero) }
+
+      define_singleton_method "with_any_#{attribute}" do |*values|
+        return where(column.gt(0)) if values.blank?
+        mask = send("bitmask_for_#{attribute}", *values)
+        condition = "#{quoted} & #{mask} != 0"
+        condition += " OR #{eq_zero}" if values.any?(&is_zero)
+        where(condition)
+      end
+
+      options[:as].each do |value|
+        define_singleton_method "#{attribute}_for_#{value}" do
+          where("#{quoted} & #{masks[value]} != 0")
         end
       end
 
@@ -70,8 +105,9 @@ module BitmaskAttributes
       # Instance Methods
 
       define_method attribute do
-        instance_variable_set variable, instance_variable_get(variable) ||
-          ValueProxy.new(self, attribute, &extension)
+        value = instance_variable_get("@#{attribute}")
+        value ||= ValueProxy.new(self, attribute, &extension)
+        instance_variable_set "@#{attribute}", value
       end
 
       define_method "#{attribute}=" do |value|
@@ -82,81 +118,18 @@ module BitmaskAttributes
         send(attribute).replace Array.wrap(value).reject &is_zero
       end
 
-      values.each do |value|
+      options[:as].each do |value|
         define_method "#{attribute}_for_#{value}?" do
           send("#{attribute}?", value)
         end
       end
 
       define_method "#{attribute}?" do |*values|
-        if values.blank?
-          send(attribute).present?
-        else
-          values.all? do |value|
-            if is_zero.(value)
-              send(attribute).blank?
-            else
-              send(attribute).include?(value)
-            end
-          end
+        return send(attribute).present? if values.blank?
+        values.all? do |value|
+          next send(attribute).blank? if is_zero.(value)
+          send(attribute).include?(value)
         end
-      end
-
-
-      # Scopes
-
-      scope "with_#{attribute}", proc {|*values|
-        if values.blank?
-          where{stub > 0}
-        else
-          values.inject(scoped) do |scope, value|
-            if is_zero.(value)
-              scope.where(eq_zero)
-            else
-              scope.where{stub.op('&', masks[value]) > 0}
-            end
-          end
-        end
-      }
-
-      scope "without_#{attribute}", proc {|*values|
-        if values.blank?
-          send("no_#{attribute}")
-        else
-          mask = send("bitmask_for_#{attribute}", *values)
-          relation = where{(stub == nil) | (stub.op('&', mask) == 0)}
-          values.any?(&is_zero) ? relation.where{stub > 0} : relation
-        end
-      }
-
-      scope "with_exact_#{attribute}", proc {|*values|
-        if values.blank?
-          send("no_#{attribute}")
-        else
-          mask = send("bitmask_for_#{attribute}", *values)
-          where{stub == mask if values.any?(&not_zero)}
-          .where{eq_zero if values.any?(&is_zero)}
-        end
-      }
-
-      scope "no_#{attribute}", proc { where(eq_zero) }
-
-      scope "with_any_#{attribute}", proc {|*values|
-        if values.blank?
-          where{stub > 0}
-        else
-          mask = send("bitmask_for_#{attribute}", *values)
-          where do
-            condition = stub.op('&', mask) != 0
-            values.any?(&is_zero) ? (condition | eq_zero) : condition
-          end
-        end
-      }
-
-      values.each do |value|
-        scope "#{attribute}_for_#{value}", proc {
-          where{stub.op('&', masks[value]) != 0}
-        }
       end
 
     end
