@@ -238,8 +238,8 @@ class BitmaskAttributesTest < ActiveSupport::TestCase
         assert campaign.save
 
         assert_equal(
-          @campaign_class.find(:all, :conditions => ['medium & ? <> 0', @campaign_class.bitmask_for_medium(:print)]),
-          @campaign_class.medium_for_print
+          @campaign_class.where("medium & #{@campaign_class.bitmask_for_medium(:print)} <> 0").to_a,
+          @campaign_class.medium_for_print.to_a
         )
 
         assert_equal @campaign_class.medium_for_print.first, @campaign_class.medium_for_print.medium_for_web.first
@@ -285,21 +285,6 @@ class BitmaskAttributesTest < ActiveSupport::TestCase
         assert_equal [], @campaign_class.with_exact_allow_zero(:none, :one)
       end
 
-
-      private
-
-      def assert_unsupported(&block)
-        assert_raises(ArgumentError, &block)
-      end
-
-      def assert_stored(record, *values)
-        values.each do |value|
-          assert record.medium.any? { |v| v.to_s == value.to_s }, "Values #{record.medium.inspect} does not include #{value.inspect}"
-        end
-        mask = @campaign_class.bitmask_for_medium(*values)
-        assert_equal mask, record.medium.to_i
-      end
-
     end
   end
 
@@ -326,4 +311,17 @@ class BitmaskAttributesTest < ActiveSupport::TestCase
   context_with_classes 'Campaign without null attributes',CampaignWithoutNull,CompanyWithoutNull
   context_with_classes 'SubCampaign with null attributes',SubCampaignWithNull,CompanyWithNull
   context_with_classes 'SubCampaign without null attributes',SubCampaignWithoutNull,CompanyWithoutNull
+
+  def assert_stored(record, *values)
+    values.each do |value|
+      assert record.medium.any? { |v| v.to_s == value.to_s }, "Values #{record.medium.inspect} does not include #{value.inspect}"
+    end
+    mask = @campaign_class.bitmask_for_medium(*values)
+    assert_equal mask, record.medium.to_i
+  end
+
+  def assert_unsupported(&block)
+    assert_raises(ArgumentError, &block)
+  end
+
 end
