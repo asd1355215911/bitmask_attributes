@@ -18,6 +18,9 @@ ActiveRecord::Schema.define do
   create_table :default_values do |t|
     t.integer :default_sym, :default_array
   end
+  create_table :bignum_attributes do |t|
+    t.integer :values
+  end
 end
 
 # Pseudo models for testing purposes
@@ -63,4 +66,8 @@ end
 class DefaultValue < ActiveRecord::Base
   bitmask :default_sym, :as => [:x, :y, :z], :default => :y
   bitmask :default_array, :as => [:x, :y, :z], :default => [:y, :z]
+end
+
+class BignumAttribute < ActiveRecord::Base
+  bitmask :values, as: (0..(0.size * 8 - 2)).map{ |i| :"v#{i + 1}" }
 end

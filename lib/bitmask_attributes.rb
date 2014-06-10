@@ -55,7 +55,7 @@ module BitmaskAttributes
       end
 
       define_singleton_method "#{attribute}_for_bitmask" do |value|
-        unless value.is_a?(Fixnum) && value.between?(0, 2 ** masks.size - 1)
+        unless value.is_a?(Integer) && value.between?(0, 2 ** masks.size - 1)
           raise ArgumentError, "Unsupported value for #{attribute}: #{value.inspect}"
         end
         values = []
@@ -112,7 +112,7 @@ module BitmaskAttributes
 
       define_method "#{attribute}=" do |value|
         value ||= default if default
-        if value.is_a?(Fixnum)
+        if value.is_a?(Integer)
           value = self.class.send("#{attribute}_for_bitmask", value)
         end
         send(attribute).replace Array.wrap(value).reject &is_zero

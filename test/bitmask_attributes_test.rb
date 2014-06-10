@@ -86,7 +86,7 @@ class BitmaskAttributesTest < ActiveSupport::TestCase
         assert_unsupported { campaign.medium = [:so_will_this] }
       end
 
-      should "can only use Fixnum values for raw bitmask values" do
+      should "can only use Integer values for raw bitmask values" do
         campaign = @campaign_class.new(:medium => :web)
         assert_unsupported { campaign.medium = :this_will_fail }
         assert_equal(campaign.medium, [:web])
@@ -113,7 +113,7 @@ class BitmaskAttributesTest < ActiveSupport::TestCase
         assert_equal([:web, :print], @campaign_class.medium_for_bitmask(3))
       end
 
-      should "assert use of non Fixnum value in inverse convenience method will result in exception" do
+      should "assert use of non Integer value in inverse convenience method will result in exception" do
         assert_unsupported { @campaign_class.medium_for_bitmask(:this_isnt_valid)  }
       end
 
@@ -305,6 +305,18 @@ class BitmaskAttributesTest < ActiveSupport::TestCase
 
     default_value.default_sym = nil
     assert_equal default_value.default_sym, [:y]
+  end
+
+  should "allow Bignums" do
+    last = BignumAttribute.values_for_values.last
+
+    model = BignumAttribute.create! values: last
+    assert_equal model.values, [last]
+    assert_equal model[:values].class, Bignum
+
+    model = BignumAttribute.new
+    model.values = BignumAttribute.bitmask_for_values(last)
+    assert_equal model.values, [last]
   end
 
   context_with_classes 'Campaign with null attributes',CampaignWithNull,CompanyWithNull
