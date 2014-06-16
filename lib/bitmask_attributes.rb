@@ -5,7 +5,7 @@ module BitmaskAttributes
 
   module ClassMethods
 
-    def bitmask(attribute, options={}, &extension)
+    def bitmask(attribute, options={})
 
       unless options[:as].kind_of?(Array)
         raise ArgumentError, "Must provide an Array :as option"
@@ -106,7 +106,7 @@ module BitmaskAttributes
 
       define_method attribute do
         value = instance_variable_get("@#{attribute}")
-        value ||= ValueProxy.new(self, attribute, &extension)
+        value ||= ValueProxy.new(self, attribute)
         instance_variable_set "@#{attribute}", value
       end
 

@@ -1,16 +1,15 @@
 module BitmaskAttributes
   class ValueProxy < Array
 
-    def initialize(record, attribute, &extension)
+    def initialize(record, attribute)
       @record = record
       @attribute = attribute
-      instance_eval(&extension) if extension
       super(extract_values)
     end
 
     alias_method :_replace, :replace
 
-    %w(push << delete replace reject! select!).each do |method|
+    %w(push << delete replace reject! select! map!).each do |method|
       define_method method do |*args|
         super(*args).tap{updated!}
       end
@@ -23,16 +22,15 @@ module BitmaskAttributes
     private
 
     def updated!
-      _replace(map(&:to_sym))
-      uniq!
-      @record.send(:write_attribute, @attribute, to_i)
+      _replace(map(&:to_sym).uniq)
+      @record[@attribute] = to_i
     rescue ArgumentError => e
       _replace(extract_values)
       raise e
     end
 
     def extract_values
-      stored = [@record.send(:read_attribute, @attribute) || 0, 0].max
+      stored = @record[@attribute] || 0
       @record.class.send("#{@attribute}_for_bitmask", stored)
     end
 

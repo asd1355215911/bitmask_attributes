@@ -2,7 +2,6 @@ require 'rubygems'
 require 'bundler'
 Bundler.setup
 require 'minitest/autorun'
-require 'shoulda'
 require 'sqlite3'
 require 'active_record'
 require 'bitmask_attributes'
