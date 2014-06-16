@@ -22,16 +22,14 @@ module BitmaskAttributes
     private
 
     def updated!
-      _replace(map(&:to_sym).uniq)
-      @record[@attribute] = to_i
+      @record[@attribute] = _replace(map(&:to_sym).uniq).to_i
     rescue ArgumentError => e
       _replace(extract_values)
       raise e
     end
 
     def extract_values
-      stored = @record[@attribute] || 0
-      @record.class.send("#{@attribute}_for_bitmask", stored)
+      @record.class.send("#{@attribute}_for_bitmask", @record[@attribute] || 0)
     end
 
   end
