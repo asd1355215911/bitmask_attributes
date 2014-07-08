@@ -33,7 +33,7 @@ require 'test_helper'
     end
 
     def test_duplicate_values
-      model = klass.new(:medium => [:web, :print])
+      model = klass.new(medium: [:web, :print])
       assert_stored model, :web, :print
       model.medium << :phone
       assert_stored model, :web, :print, :phone

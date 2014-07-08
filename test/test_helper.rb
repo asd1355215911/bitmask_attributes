@@ -6,7 +6,7 @@ require 'sqlite3'
 require 'active_record'
 require 'bitmask_attributes'
 ActiveRecord::Base.establish_connection(
-  :adapter  => 'sqlite3',
-  :database => ':memory:'
+  adapter: 'sqlite3',
+  database: ':memory:'
 )
 require 'support/models'
